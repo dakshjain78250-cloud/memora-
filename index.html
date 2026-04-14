@@ -361,6 +361,35 @@
         display: flex;
         align-items: center;
         gap: 1rem;
+        position: relative;
+        transition: transform 0.2s;
+      }
+
+      .activity-item:hover {
+        transform: translateX(4px);
+      }
+
+      .btn-delete-activity {
+        background: none;
+        border: none;
+        color: #999;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        opacity: 0;
+      }
+
+      .activity-item:hover .btn-delete-activity {
+        opacity: 1;
+      }
+
+      .btn-delete-activity:hover {
+        background: #fee2e2;
+        color: #dc3545;
       }
 
       .activity-icon {
@@ -515,6 +544,21 @@
 
       .btn-delete-project:hover {
         color: #dc3545;
+      }
+
+      /* Loading Spinner */
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        border-left-color: #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
       }
 
       /* Main App Layout */
@@ -695,25 +739,18 @@
         <div id="research" class="tab-content active">
           <div class="content-header">
             <h2>Research</h2>
-            <p>Use your voice to start a new research session.</p>
+            <p>Enter a topic to start a new AI-powered research session.</p>
           </div>
           
           <div class="research-container">
-            <button id="micBtn" class="mic-button" onclick="toggleMic()">
-              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mic"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-            </button>
-            
-            <div id="listeningStatus" style="font-size: 0.875rem; color: #dc3545; font-weight: 600; display: none; margin-top: -1rem;">
-              Listening...
-            </div>
-            
-            <div id="micError" style="color: #dc3545; font-size: 0.875rem; display: none; text-align: center; max-width: 400px;">
-              Microphone access was denied. Please ensure you have granted permission in your browser and that the app has permission to use the microphone.
-            </div>
-            
-            <textarea id="transcriptArea" class="transcript-area" placeholder="Your voice transcript will appear here..." oninput="validateResearch()"></textarea>
+            <textarea id="transcriptArea" class="transcript-area" placeholder="Enter your research topic here (e.g. The future of renewable energy)..." oninput="validateResearch()"></textarea>
             
             <button id="btnRunResearch" class="btn-run-research" disabled onclick="runResearch()">Run Research</button>
+            
+            <div id="researchLoading" class="loading-spinner" style="display: none; margin: 1rem auto; text-align: center;">
+              <div class="spinner"></div>
+              <p style="margin-top: 0.5rem; color: #666;">AI is conducting research...</p>
+            </div>
             
             <div id="resultCard" class="result-card">
               <div class="result-section">
@@ -747,6 +784,11 @@
             <div class="idea-input-group">
               <input type="text" id="ideaInput" class="idea-input" placeholder="Enter your idea (e.g. A social network for pets)" oninput="validateIdea()">
               <button id="btnGeneratePlan" class="btn-generate" disabled onclick="generatePlan()">Generate Product Plan</button>
+            </div>
+
+            <div id="ideaLoading" class="loading-spinner" style="display: none; margin: 1rem auto; text-align: center;">
+              <div class="spinner"></div>
+              <p style="margin-top: 0.5rem; color: #666;">AI is generating your product plan...</p>
             </div>
 
             <div id="planCard" class="plan-card">
@@ -859,9 +901,11 @@
       </main>
     </div>
 
-    <script>
-      let recognition;
-      let isListening = false;
+    <script type="module">
+      import { GoogleGenAI, Type } from "@google/genai";
+
+      // Initialize Gemini
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
       // Initialize app on load
       window.onload = function() {
@@ -879,207 +923,153 @@
 
         // Initialize Dashboard
         updateDashboard();
-
-        // Initialize Speech Recognition
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          recognition = new SpeechRecognition();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-
-          recognition.onresult = (event) => {
-            console.log('Speech recognition event:', event);
-            let fullTranscript = '';
-            for (let i = 0; i < event.results.length; i++) {
-              fullTranscript += event.results[i][0].transcript;
-            }
-            console.log('Transcript updated:', fullTranscript);
-            const area = document.getElementById('transcriptArea');
-            area.value = fullTranscript;
-            area.scrollTop = area.scrollHeight;
-            validateResearch();
-          };
-
-          recognition.onstart = () => {
-            console.log('Speech recognition service has started');
-          };
-
-          recognition.onspeechstart = () => {
-            console.log('Speech has been detected');
-          };
-
-          recognition.onaudiostart = () => {
-            console.log('Audio capturing started');
-          };
-
-          recognition.onaudioend = () => {
-            console.log('Audio capturing ended');
-          };
-
-          recognition.onnomatch = (event) => {
-            console.log('No match found for speech input');
-          };
-
-          recognition.onerror = (event) => {
-            // Suppress console error for 'no-speech' as it's handled gracefully
-            if (event.error !== 'no-speech') {
-              console.error('Speech recognition error:', event.error);
-            }
-            
-            if (event.error === 'not-allowed') {
-              document.getElementById('micError').textContent = 'Microphone access was denied. Please check your browser settings.';
-              document.getElementById('micError').style.display = 'block';
-              document.getElementById('micBtn').disabled = true;
-              stopMic();
-            } else if (event.error === 'audio-capture') {
-              document.getElementById('micError').textContent = 'No microphone was found. Please ensure your microphone is plugged in and enabled.';
-              document.getElementById('micError').style.display = 'block';
-              stopMic();
-            } else if (event.error === 'network') {
-              document.getElementById('micError').textContent = 'Network error occurred. Speech recognition requires an internet connection.';
-              document.getElementById('micError').style.display = 'block';
-              stopMic();
-            } else if (event.error === 'no-speech') {
-              // no-speech is a timeout, we'll let onend handle the restart
-            } else {
-              stopMic();
-            }
-          };
-
-          recognition.onend = () => {
-            console.log('Speech recognition service has ended. isListening:', isListening);
-            if (isListening) {
-              // Small delay to ensure the service has fully stopped before restarting
-              setTimeout(() => {
-                if (isListening) {
-                  try {
-                    recognition.start();
-                  } catch (e) {
-                    console.error('Failed to restart recognition:', e);
-                  }
-                }
-              }, 100);
-            }
-          };
-        } else {
-          console.warn('Speech Recognition API not supported in this browser.');
-          document.getElementById('micBtn').disabled = true;
-          document.getElementById('transcriptArea').placeholder = "Speech recognition not supported. Please type your query here.";
-        }
       };
 
-      function toggleMic() {
-        if (isListening) {
-          stopMic();
-        } else {
-          startMic();
-        }
-      }
-
-      function startMic() {
-        if (!recognition) return;
-        isListening = true;
-        try {
-          recognition.lang = 'en-US';
-          recognition.start();
-          document.getElementById('transcriptArea').value = '';
-          document.getElementById('micBtn').classList.add('listening');
-          document.getElementById('listeningStatus').style.display = 'block';
-          document.getElementById('micError').style.display = 'none';
-        } catch (e) {
-          console.error('Error starting recognition:', e);
-          isListening = false;
-        }
-      }
-
-      function stopMic() {
-        if (!recognition) return;
-        isListening = false;
-        recognition.stop();
-        document.getElementById('micBtn').classList.remove('listening');
-        document.getElementById('listeningStatus').style.display = 'none';
-      }
-
-      function validateResearch() {
+      window.validateResearch = function() {
         const transcript = document.getElementById('transcriptArea').value.trim();
         document.getElementById('btnRunResearch').disabled = !transcript;
       }
 
-      function runResearch() {
-        const transcript = document.getElementById('transcriptArea').value.trim();
-        if (!transcript) return;
+      window.runResearch = async function() {
+        const query = document.getElementById('transcriptArea').value.trim();
+        if (!query) return;
 
-        // Generate mock data
-        const result = {
-          overview: `Comprehensive analysis based on your query: "${transcript}". This research explores the core foundations and current state of the subject.`,
-          marketSize: "Estimated at $45.2 Billion globally, with a projected CAGR of 12.5% over the next five years.",
-          competitors: "Key players include industry leaders and emerging startups focusing on innovative solutions and market disruption.",
-          trends: "Shift towards automation, increased focus on sustainability, and rapid adoption of AI-driven analytics."
-        };
+        const btn = document.getElementById('btnRunResearch');
+        const loading = document.getElementById('researchLoading');
+        const resultCard = document.getElementById('resultCard');
 
-        // Display results
-        document.getElementById('resOverview').textContent = result.overview;
-        document.getElementById('resMarketSize').textContent = result.marketSize;
-        document.getElementById('resCompetitors').textContent = result.competitors;
-        document.getElementById('resTrends').textContent = result.trends;
-        document.getElementById('resultCard').style.display = 'block';
+        btn.disabled = true;
+        loading.style.display = 'block';
+        resultCard.style.display = 'none';
 
-        // Save to history
-        const history = JSON.parse(localStorage.getItem('jarvis_research_history') || '[]');
-        history.push({
-          transcript: transcript,
-          result: result,
-          timestamp: new Date().toISOString()
-        });
-        localStorage.setItem('jarvis_research_history', JSON.stringify(history));
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: `Perform market research on the following topic: "${query}".`,
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  overview: { type: Type.STRING, description: "A brief summary of the topic." },
+                  marketSize: { type: Type.STRING, description: "Estimated market size or growth potential." },
+                  competitors: { type: Type.STRING, description: "Key players in the industry." },
+                  trends: { type: Type.STRING, description: "Current and emerging trends." }
+                },
+                required: ["overview", "marketSize", "competitors", "trends"]
+              }
+            }
+          });
+
+          const result = JSON.parse(response.text);
+
+          // Display results
+          document.getElementById('resOverview').textContent = result.overview;
+          document.getElementById('resMarketSize').textContent = result.marketSize;
+          document.getElementById('resCompetitors').textContent = result.competitors;
+          document.getElementById('resTrends').textContent = result.trends;
+          resultCard.style.display = 'block';
+
+          // Save to history
+          const history = JSON.parse(localStorage.getItem('jarvis_research_history') || '[]');
+          history.unshift({
+            transcript: query,
+            result: result,
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('jarvis_research_history', JSON.stringify(history));
+          
+          updateDashboard();
+        } catch (error) {
+          console.error('Research error:', error);
+          alert('Failed to conduct research. Please ensure your Gemini API key is valid.');
+        } finally {
+          btn.disabled = false;
+          loading.style.display = 'none';
+        }
       }
 
       // Ideas Tab Logic
-      function validateIdea() {
+      window.validateIdea = function() {
         const input = document.getElementById('ideaInput').value.trim();
         document.getElementById('btnGeneratePlan').disabled = !input;
       }
 
-      function generatePlan() {
+      window.generatePlan = async function() {
         const idea = document.getElementById('ideaInput').value.trim();
         if (!idea) return;
 
-        // Generate mock plan
-        const plan = {
-          problem: `Current solutions for "${idea}" are fragmented, expensive, or lack the specific features needed by the target demographic.`,
-          solution: `A streamlined, AI-powered platform that automates the core workflows of ${idea}, reducing friction and cost.`,
-          audience: "Early adopters, small to medium businesses, and tech-savvy individuals looking for efficiency.",
-          features: "Real-time collaboration, predictive analytics, seamless integrations, and a mobile-first interface.",
-          monetization: "Freemium model with a $19/mo pro tier for advanced features and team collaboration tools."
-        };
+        const btn = document.getElementById('btnGeneratePlan');
+        const loading = document.getElementById('ideaLoading');
+        const planCard = document.getElementById('planCard');
 
-        // Display plan
-        document.getElementById('planTitle').textContent = idea;
-        document.getElementById('planProblem').textContent = plan.problem;
-        document.getElementById('planSolution').textContent = plan.solution;
-        document.getElementById('planAudience').textContent = plan.audience;
-        document.getElementById('planFeatures').textContent = plan.features;
-        document.getElementById('planMonetization').textContent = plan.monetization;
-        document.getElementById('planCard').style.display = 'block';
+        btn.disabled = true;
+        loading.style.display = 'block';
+        planCard.style.display = 'none';
 
-        // Save to history
-        const ideas = JSON.parse(localStorage.getItem('jarvis_ideas') || '[]');
-        ideas.unshift({
-          idea: idea,
-          plan: plan,
-          timestamp: new Date().toISOString()
-        });
-        localStorage.setItem('jarvis_ideas', JSON.stringify(ideas));
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: `Generate a product plan for the following idea: "${idea}".`,
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  problem: { type: Type.STRING },
+                  solution: { type: Type.STRING },
+                  targetAudience: { type: Type.STRING },
+                  mvpFeatures: { type: Type.STRING, description: "List of 3-5 essential features." },
+                  monetization: { type: Type.STRING }
+                },
+                required: ["problem", "solution", "targetAudience", "mvpFeatures", "monetization"]
+              }
+            }
+          });
 
-        // Refresh history list
-        renderIdeasHistory();
-        
-        // Clear input
-        document.getElementById('ideaInput').value = '';
-        validateIdea();
+          const plan = JSON.parse(response.text);
+
+          // Display plan
+          document.getElementById('planTitle').textContent = idea;
+          document.getElementById('planProblem').textContent = plan.problem;
+          document.getElementById('planSolution').textContent = plan.solution;
+          document.getElementById('planAudience').textContent = plan.targetAudience;
+          document.getElementById('planFeatures').textContent = plan.mvpFeatures;
+          document.getElementById('planMonetization').textContent = plan.monetization;
+          planCard.style.display = 'block';
+
+          // Save to history
+          const ideas = JSON.parse(localStorage.getItem('jarvis_ideas') || '[]');
+          ideas.unshift({
+            idea: idea,
+            plan: {
+              problem: plan.problem,
+              solution: plan.solution,
+              audience: plan.targetAudience,
+              features: plan.mvpFeatures,
+              monetization: plan.monetization
+            },
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('jarvis_ideas', JSON.stringify(ideas));
+
+          // Refresh history list
+          renderIdeasHistory();
+          updateDashboard();
+          
+          // Clear input
+          document.getElementById('ideaInput').value = '';
+          validateIdea();
+        } catch (error) {
+          console.error('Plan error:', error);
+          alert('Failed to generate plan. Please try again.');
+        } finally {
+          btn.disabled = false;
+          loading.style.display = 'none';
+        }
       }
 
-      function renderIdeasHistory() {
+      window.renderIdeasHistory = function() {
         const ideas = JSON.parse(localStorage.getItem('jarvis_ideas') || '[]');
         const container = document.getElementById('ideasHistory');
         
@@ -1099,7 +1089,7 @@
         `).join('');
       }
 
-      function viewPastPlan(timestamp) {
+      window.viewPastPlan = function(timestamp) {
         const ideas = JSON.parse(localStorage.getItem('jarvis_ideas') || '[]');
         const item = ideas.find(i => i.timestamp === timestamp);
         if (!item) return;
@@ -1117,7 +1107,7 @@
       }
 
       // Dashboard Tab Logic
-      function updateDashboard() {
+      window.updateDashboard = function() {
         const research = JSON.parse(localStorage.getItem('jarvis_research_history') || '[]');
         const ideas = JSON.parse(localStorage.getItem('jarvis_ideas') || '[]');
         const projects = JSON.parse(localStorage.getItem('jarvis_projects') || '[]');
@@ -1135,7 +1125,7 @@
         renderInsights(research, ideas, user);
       }
 
-      function renderActivity(research, ideas, projects) {
+      window.renderActivity = function(research, ideas, projects) {
         const container = document.getElementById('activityList');
         
         // Merge and sort activity
@@ -1164,11 +1154,32 @@
               <p>${act.detail.length > 60 ? act.detail.substring(0, 60) + '...' : act.detail}</p>
             </div>
             <div class="activity-time">${formatTime(act.time)}</div>
+            <button class="btn-delete-activity" onclick="deleteActivity('${act.type}', '${act.time}')" title="Remove activity">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
           </div>
         `).join('');
       }
 
-      function renderInsights(research, ideas, user) {
+      window.deleteActivity = function(type, timestamp) {
+        let key = '';
+        if (type === 'research') key = 'jarvis_research_history';
+        else if (type === 'idea') key = 'jarvis_ideas';
+        else if (type === 'project') key = 'jarvis_projects';
+        
+        if (!key) return;
+        
+        let data = JSON.parse(localStorage.getItem(key) || '[]');
+        data = data.filter(item => item.timestamp !== timestamp);
+        localStorage.setItem(key, JSON.stringify(data));
+        
+        // Refresh UI
+        updateDashboard();
+        if (type === 'idea') renderIdeasHistory();
+        if (type === 'project') renderProjects();
+      }
+
+      window.renderInsights = function(research, ideas, user) {
         const container = document.getElementById('insightsContainer');
         const insights = [];
 
@@ -1206,7 +1217,7 @@
         `).join('');
       }
 
-      function formatTime(timestamp) {
+      window.formatTime = function(timestamp) {
         const date = new Date(timestamp);
         const now = new Date();
         const diff = (now - date) / 1000; // seconds
@@ -1218,13 +1229,13 @@
       }
 
       // Projects Tab Logic
-      function validateProjectForm() {
+      window.validateProjectForm = function() {
         const name = document.getElementById('projName').value.trim();
         const deadline = document.getElementById('projDeadline').value;
         document.getElementById('btnAddProject').disabled = !(name && deadline);
       }
 
-      function addProject() {
+      window.addProject = function() {
         const name = document.getElementById('projName').value.trim();
         const status = document.getElementById('projStatus').value;
         const deadline = document.getElementById('projDeadline').value;
@@ -1249,7 +1260,7 @@
         validateProjectForm();
       }
 
-      function renderProjects() {
+      window.renderProjects = function() {
         const projects = JSON.parse(localStorage.getItem('jarvis_projects') || '[]');
         const container = document.getElementById('projectGrid');
 
@@ -1270,14 +1281,14 @@
         `).join('');
       }
 
-      function deleteProject(id) {
+      window.deleteProject = function(id) {
         let projects = JSON.parse(localStorage.getItem('jarvis_projects') || '[]');
         projects = projects.filter(p => p.id !== id);
         localStorage.setItem('jarvis_projects', JSON.stringify(projects));
         renderProjects();
       }
 
-      function validateForm() {
+      window.validateForm = function() {
         const name = document.getElementById('userName').value.trim();
         const level = document.getElementById('userLevel').value;
         const interests = document.getElementById('userInterests').value.trim();
@@ -1287,7 +1298,7 @@
         btn.disabled = !(name && level && interests && goal);
       }
 
-      function submitOnboarding() {
+      window.submitOnboarding = function() {
         const user = {
           name: document.getElementById('userName').value.trim(),
           level: document.getElementById('userLevel').value,
@@ -1302,13 +1313,13 @@
         showMainApp(user.name);
       }
 
-      function showMainApp(name) {
+      window.showMainApp = function(name) {
         document.getElementById('onboarding').style.display = 'none';
         document.getElementById('app-container').style.display = 'flex';
         document.getElementById('displayUserName').textContent = name;
       }
 
-      function showTab(tabId) {
+      window.showTab = function(tabId) {
         // Hide all tab contents
         const contents = document.querySelectorAll('.tab-content');
         contents.forEach(content => content.classList.remove('active'));
