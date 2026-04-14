@@ -694,26 +694,6 @@
           <input type="text" id="userName" class="input-field" placeholder="e.g. John Doe" oninput="validateForm()">
         </div>
 
-        <div class="form-group">
-          <label for="userLevel">Skill Level</label>
-          <select id="userLevel" class="select-field" onchange="validateForm()">
-            <option value="" disabled selected>Select your level</option>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="userInterests">Interests</label>
-          <input type="text" id="userInterests" class="input-field" placeholder="e.g. AI, Design, Web Dev" oninput="validateForm()">
-        </div>
-
-        <div class="form-group">
-          <label for="userGoal">What do you want to build?</label>
-          <textarea id="userGoal" class="textarea-field" placeholder="Describe your main objective..." oninput="validateForm()"></textarea>
-        </div>
-
         <button id="btnContinue" class="btn-continue" disabled onclick="submitOnboarding()">Continue</button>
       </div>
     </section>
@@ -1290,21 +1270,13 @@
 
       window.validateForm = function() {
         const name = document.getElementById('userName').value.trim();
-        const level = document.getElementById('userLevel').value;
-        const interests = document.getElementById('userInterests').value.trim();
-        const goal = document.getElementById('userGoal').value.trim();
-        
         const btn = document.getElementById('btnContinue');
-        btn.disabled = !(name && level && interests && goal);
+        btn.disabled = !name;
       }
 
       window.submitOnboarding = function() {
-        const user = {
-          name: document.getElementById('userName').value.trim(),
-          level: document.getElementById('userLevel').value,
-          interests: document.getElementById('userInterests').value.trim(),
-          goal: document.getElementById('userGoal').value.trim()
-        };
+        const name = document.getElementById('userName').value.trim();
+        const user = { name };
 
         // Save to localStorage
         localStorage.setItem('jarvis_user', JSON.stringify(user));
