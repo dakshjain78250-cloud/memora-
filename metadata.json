@@ -1,0 +1,8 @@
+{
+  "name": "Jarvis",
+  "description": "A clean, tab-based dashboard for research, ideas, and projects.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
