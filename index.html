@@ -881,12 +881,8 @@
       </main>
     </div>
 
-    <script type="module">
-      import { GoogleGenAI, Type } from "@google/genai";
-
-      // Initialize Gemini
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
+    <script>
+      // Onboarding Logic (Independent of Gemini SDK)
       window.validateForm = function() {
         const nameInput = document.getElementById('userName');
         const btn = document.getElementById('btnContinue');
@@ -894,6 +890,13 @@
         
         const name = nameInput.value.trim();
         btn.disabled = !name;
+        if (!btn.disabled) {
+          btn.style.backgroundColor = '#1a1a1a';
+          btn.style.opacity = '1';
+        } else {
+          btn.style.backgroundColor = '#ccc';
+          btn.style.opacity = '0.5';
+        }
       }
 
       window.submitOnboarding = function() {
@@ -905,29 +908,56 @@
 
         const user = { name };
         localStorage.setItem('jarvis_user', JSON.stringify(user));
-        showMainApp(user.name);
+        window.showMainApp(user.name);
       }
+
+      window.showMainApp = function(name) {
+        const onboarding = document.getElementById('onboarding');
+        const appContainer = document.getElementById('app-container');
+        const displayUser = document.getElementById('displayUserName');
+        
+        if (onboarding) onboarding.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'flex';
+        if (displayUser) displayUser.textContent = name;
+      }
+
+      // Check for saved user immediately
+      const savedUser = localStorage.getItem('jarvis_user');
+      if (savedUser) {
+        try {
+          const user = JSON.parse(savedUser);
+          if (user && user.name) {
+            // Use a small timeout to ensure DOM is ready
+            setTimeout(() => window.showMainApp(user.name), 0);
+          }
+        } catch (e) {
+          console.error("Error parsing saved user", e);
+        }
+      }
+
+      // Set up listeners
+      document.addEventListener('DOMContentLoaded', () => {
+        const nameInput = document.getElementById('userName');
+        if (nameInput) {
+          ['input', 'keyup', 'change', 'paste'].forEach(evt => {
+            nameInput.addEventListener(evt, window.validateForm);
+          });
+          // Initial check
+          window.validateForm();
+          // Fail-safe
+          setInterval(window.validateForm, 500);
+        }
+      });
+    </script>
+
+    <script type="module">
+      import { GoogleGenAI } from "@google/genai";
+
+      // Initialize Gemini
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
       // Initialize app on load
       window.onload = function() {
-        const savedUser = localStorage.getItem('jarvis_user');
-        if (savedUser) {
-          const user = JSON.parse(savedUser);
-          showMainApp(user.name);
-        }
-
-        // Add event listener for onboarding name input
-        const nameInput = document.getElementById('userName');
-        if (nameInput) {
-          nameInput.addEventListener('input', validateForm);
-          nameInput.addEventListener('keyup', validateForm);
-          nameInput.addEventListener('change', validateForm);
-          // Initial check for autofill
-          validateForm();
-          // Fail-safe check every 500ms
-          setInterval(validateForm, 500);
-        }
-
         // Initialize Ideas History
         renderIdeasHistory();
 
