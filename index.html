@@ -691,10 +691,10 @@
         
         <div class="form-group">
           <label for="userName">Full Name</label>
-          <input type="text" id="userName" class="input-field" placeholder="e.g. John Doe" oninput="validateForm()">
+          <input type="text" id="userName" class="input-field" placeholder="e.g. John Doe">
         </div>
 
-        <button id="btnContinue" class="btn-continue" disabled onclick="submitOnboarding()">Continue</button>
+        <button id="btnContinue" class="btn-continue" disabled onclick="submitOnboarding()" ontouchstart="submitOnboarding()">Continue</button>
       </div>
     </section>
 
@@ -887,12 +887,45 @@
       // Initialize Gemini
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+      window.validateForm = function() {
+        const nameInput = document.getElementById('userName');
+        const btn = document.getElementById('btnContinue');
+        if (!nameInput || !btn) return;
+        
+        const name = nameInput.value.trim();
+        btn.disabled = !name;
+      }
+
+      window.submitOnboarding = function() {
+        const nameInput = document.getElementById('userName');
+        if (!nameInput) return;
+        
+        const name = nameInput.value.trim();
+        if (!name) return;
+
+        const user = { name };
+        localStorage.setItem('jarvis_user', JSON.stringify(user));
+        showMainApp(user.name);
+      }
+
       // Initialize app on load
       window.onload = function() {
         const savedUser = localStorage.getItem('jarvis_user');
         if (savedUser) {
           const user = JSON.parse(savedUser);
           showMainApp(user.name);
+        }
+
+        // Add event listener for onboarding name input
+        const nameInput = document.getElementById('userName');
+        if (nameInput) {
+          nameInput.addEventListener('input', validateForm);
+          nameInput.addEventListener('keyup', validateForm);
+          nameInput.addEventListener('change', validateForm);
+          // Initial check for autofill
+          validateForm();
+          // Fail-safe check every 500ms
+          setInterval(validateForm, 500);
         }
 
         // Initialize Ideas History
@@ -1266,23 +1299,6 @@
         projects = projects.filter(p => p.id !== id);
         localStorage.setItem('jarvis_projects', JSON.stringify(projects));
         renderProjects();
-      }
-
-      window.validateForm = function() {
-        const name = document.getElementById('userName').value.trim();
-        const btn = document.getElementById('btnContinue');
-        btn.disabled = !name;
-      }
-
-      window.submitOnboarding = function() {
-        const name = document.getElementById('userName').value.trim();
-        const user = { name };
-
-        // Save to localStorage
-        localStorage.setItem('jarvis_user', JSON.stringify(user));
-
-        // Show main app
-        showMainApp(user.name);
       }
 
       window.showMainApp = function(name) {
